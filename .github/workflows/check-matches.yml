@@ -1,0 +1,48 @@
+name: Check padel matches
+
+on:
+  schedule:
+    - cron: "0 8-23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: padel-match-checker
+  cancel-in-progress: false
+
+jobs:
+  check-matches:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/London
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: python -m unittest -v
+
+      - name: Check for new matches and notify
+        env:
+          MATCHES_SEARCH_URL: ${{ secrets.MATCHES_SEARCH_URL }}
+          MATCH_DETAILS_URL: ${{ secrets.MATCH_DETAILS_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python check_matches.py
+
+      - name: Save notification state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add seen_matches.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update padel match notification state"
+            git push
+          fi
